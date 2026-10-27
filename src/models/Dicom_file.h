@@ -10,6 +10,7 @@ public:
     Dicom_file(const fs::path&);
 
     DcmDataset& get_dataset() {return *m_file.getDataset();}
+    DcmMetaInfo& get_meta_info() {return *m_file.getMetaInfo();}
     fs::path get_path() {return m_path;}
     bool has_unsaved_changes() {return m_unsaved_changes;}
     void set_unsaved_changes(bool value) {m_unsaved_changes = value;}

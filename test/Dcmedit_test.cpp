@@ -27,6 +27,9 @@ public:
         auto create_dataset_view_mock = [] {
             auto view_mock = std::make_unique<Dataset_view_mock>();
             view_mock->expect.push_back(NAMED_REQUIRE_CALL(*view_mock, set_model(_)));
+            view_mock->expect.push_back(NAMED_ALLOW_CALL(*view_mock, get_selected_indexes())
+                .RETURN(QModelIndexList()));
+            view_mock->expect.push_back(NAMED_ALLOW_CALL(*view_mock, show_hex(_)));
             return view_mock;
         };
         auto create_image_view_mock = [] {

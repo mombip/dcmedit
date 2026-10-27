@@ -13,7 +13,9 @@ public:
 
     eventi::Event<> dataset_changed;
 
+    Dicom_file* get_file() const;
     DcmItem* get_dataset() const;
+    DcmItem* get_meta_info() const;
     DcmObject* get_object(const QModelIndex&) const;
     DcmEVR get_vr(const QModelIndex&) const;
 
@@ -33,6 +35,7 @@ public:
 private:
     void setup_event_callbacks();
 
+    int root_row_offset() const;
     void reset_model();
     void mark_as_modified();
 

@@ -8,6 +8,7 @@
 #include <dcmtk/dcmdata/dcelem.h>
 #include <dcmtk/dcmdata/dcistrmf.h>
 #include <dcmtk/dcmdata/dcitem.h>
+#include <dcmtk/dcmdata/dcmetinf.h>
 #include <dcmtk/dcmdata/dcsequen.h>
 #include <stdexcept>
 
@@ -73,6 +74,10 @@ void Dataset_model::setup_event_callbacks() {
     m_files.all_files_edited.add_callback([this] {reset_model();});
 }
 
+Dicom_file* Dataset_model::get_file() const {
+    return m_files.get_current_file();
+}
+
 DcmItem* Dataset_model::get_dataset() const {
     if(Dicom_file* file = m_files.get_current_file()) {
         return &file->get_dataset();
@@ -81,6 +86,16 @@ DcmItem* Dataset_model::get_dataset() const {
         Log::debug("Failed to get dataset");
         return nullptr;
     }
+}
+
+DcmItem* Dataset_model::get_meta_info() const {
+    Dicom_file* file = m_files.get_current_file();
+    return file ? &file->get_meta_info() : nullptr;
+}
+
+// The first root row is the file meta information, the rest are the dataset elements.
+int Dataset_model::root_row_offset() const {
+    return get_meta_info() ? 1 : 0;
 }
 
 DcmObject* Dataset_model::get_object(const QModelIndex& index) const {
@@ -143,12 +158,16 @@ void Dataset_model::delete_index(const QModelIndex& index) {
     }
     const DcmEVR vr = parent->ident();
     const int row = index.row();
+
+    if(get_object(index)->ident() == EVR_metainfo) {
+        throw std::runtime_error("the file meta information can't be deleted");
+    }
     bool bad_vr = false;
     beginRemoveRows(index.parent(), row, row);
 
-    if(vr == EVR_item || vr == EVR_dataset) {
+    if(vr == EVR_item || vr == EVR_dataset || vr == EVR_metainfo) {
         auto item = static_cast<DcmItem*>(parent);
-        DcmElement* element = item->remove(row);
+        DcmElement* element = item->remove(index.parent().isValid() ? row : row - root_row_offset());
         delete element;
     }
     else if(vr == EVR_SQ) {
@@ -215,13 +234,20 @@ QModelIndex Dataset_model::index(int row, int column, const QModelIndex& parent)
         if(dataset == nullptr) {
             return QModelIndex();
         }
-        child = dataset->getElement(row);
+        const int offset = root_row_offset();
+
+        if(row < offset) {
+            child = get_meta_info();
+        }
+        else {
+            child = dataset->getElement(row - offset);
+        }
     }
     else {
         DcmObject* parent_obj = get_object(parent);
         const DcmEVR vr = parent_obj ? parent_obj->ident() : EVR_UNKNOWN;
 
-        if(vr == EVR_item || vr == EVR_dataset) {
+        if(vr == EVR_item || vr == EVR_dataset || vr == EVR_metainfo) {
             auto item = static_cast<DcmItem*>(parent_obj);
             child = item->getElement(row);
         }
@@ -243,10 +269,17 @@ QModelIndex Dataset_model::parent(const QModelIndex& index) const {
     DcmObject* object = get_object(index);
     DcmObject* parent = object ? object->getParent() : nullptr;
 
-    if(!parent || parent == get_dataset()) {
+    if(!parent || parent == get_dataset() || object == get_meta_info()) {
         return QModelIndex();
     }
+    if(parent == get_meta_info()) {
+        return createIndex(0, 0, parent);
+    }
     int row = Dicom_util::get_index_nr(*parent);
+
+    if(parent->getParent() == get_dataset()) {
+        row += root_row_offset();
+    }
     return createIndex(row, 0, parent);
 }
 
@@ -254,7 +287,8 @@ int Dataset_model::rowCount(const QModelIndex& parent) const {
     DcmObject* object = get_object(parent);
 
     if(object && !object->isLeaf()) {
-        return object->getNumberOfValues();
+        const int offset = parent.isValid() ? 0 : root_row_offset();
+        return static_cast<int>(object->getNumberOfValues()) + offset;
     }
     return 0;
 }
@@ -271,7 +305,10 @@ QVariant Dataset_model::data(const QModelIndex& index, int role) const {
     QVariant data;
     const DcmEVR vr = object->ident();
 
-    if(vr == EVR_item || vr == EVR_dataset) {
+    if(vr == EVR_metainfo) {
+        data = index.column() == 0 ? QVariant("File Meta Information") : QVariant();
+    }
+    else if(vr == EVR_item || vr == EVR_dataset) {
         auto item = static_cast<DcmItem*>(object);
         data = get_item_data(*item, index.row(), index.column());
     }
