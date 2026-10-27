@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=dcmedit
+Comment=DICOM editor
+Exec=dcmedit
+Categories=Graphics;MedicalSoftware;Science;

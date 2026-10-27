@@ -16,6 +16,8 @@ FetchContent_Declare(
     GIT_TAG e74332bdf7f1e9159014934f310b4579024eba54)
 
 FetchContent_MakeAvailable(eventi)
+# Keep eventi's headers and library out of "make install" and the package.
+set_property(DIRECTORY "${eventi_SOURCE_DIR}" PROPERTY EXCLUDE_FROM_ALL ON)
 
 add_executable(dcmedit WIN32 MACOSX_BUNDLE
   assets/assets.qrc
@@ -141,4 +143,20 @@ target_link_libraries(dcmedit
   "${DCMTK_LIBRARIES}"
 )
 
-add_subdirectory(test)
+option(DCMEDIT_BUILD_TESTS "Build the unit tests" ON)
+
+if(DCMEDIT_BUILD_TESTS)
+  add_subdirectory(test)
+endif()
+
+install(TARGETS dcmedit RUNTIME DESTINATION bin)
+install(FILES assets/dcmedit.desktop DESTINATION share/applications)
+
+set(CPACK_PACKAGE_NAME dcmedit)
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "DICOM editor")
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+set(CPACK_DEBIAN_PACKAGE_SECTION science)
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+# The SVG icons are loaded through a Qt plugin, which shlibdeps can't see.
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt5svg5")
+include(CPack)
