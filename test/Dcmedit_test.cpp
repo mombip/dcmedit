@@ -167,3 +167,32 @@ TEST_CASE_METHOD(Dcmedit_test_fixture, "Clearing all files shows the startup vie
 
     m_main_view_mock.clear_all_files_clicked();
 }
+
+TEST_CASE_METHOD(Dcmedit_test_fixture, "Dropping a folder opens the files in it") {
+    auto create_progress_view_mock = [] {
+        auto view_mock = std::make_unique<Progress_view_mock>();
+        view_mock->expect.push_back(NAMED_ALLOW_CALL(*view_mock, set_max(_)));
+        view_mock->expect.push_back(NAMED_ALLOW_CALL(*view_mock, set_value(_)));
+        view_mock->expect.push_back(NAMED_REQUIRE_CALL(*view_mock, set_text("Opening files")));
+        view_mock->expect.push_back(NAMED_REQUIRE_CALL(*view_mock, show()));
+        view_mock->expect.push_back(NAMED_REQUIRE_CALL(*view_mock, close()));
+        return view_mock;
+    };
+    auto create_open_files_view_mock = [create_progress_view_mock] {
+        auto view_mock = std::make_unique<Open_files_view_mock>();
+        view_mock->expect.push_back(NAMED_REQUIRE_CALL(*view_mock, create_progress_view())
+            .RETURN(create_progress_view_mock()));
+        return view_mock;
+    };
+    REQUIRE_CALL(m_main_view_mock, create_open_files_view())
+        .RETURN(create_open_files_view_mock());
+    REQUIRE_CALL(m_main_view_mock, set_editor_view());
+    ALLOW_CALL(m_main_view_mock, set_window_modified(_));
+    ALLOW_CALL(m_main_view_mock, set_window_title(_));
+    Named_expectations expectations;
+    for(Image_view_mock* mock : get_image_view_mocks()) {
+        expectations.push_back(NAMED_ALLOW_CALL(*mock, update()));
+    }
+
+    m_main_view_mock.files_dropped({data_path});
+}
