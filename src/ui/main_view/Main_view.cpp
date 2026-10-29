@@ -8,10 +8,13 @@
 #include "ui/progressbar/Progress_view.h"
 
 #include <QCloseEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QFileDialog>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QStackedWidget>
 #include <QToolBar>
 
@@ -22,6 +25,7 @@ Main_view::Main_view()
       m_stacked_widget(new QStackedWidget(this)),
       m_tool_bar(create_editor_tool_bar()) {
     setMinimumSize(800, 600);
+    setAcceptDrops(true);
     setCentralWidget(m_stacked_widget);
     addDockWidget(Qt::LeftDockWidgetArea, m_file_tree_view);
     addToolBar(m_tool_bar);
@@ -164,6 +168,30 @@ QToolBar* Main_view::create_editor_tool_bar() {
 void Main_view::closeEvent(QCloseEvent* event) {
     event->ignore();
     quit_clicked();
+}
+
+static std::vector<fs::path> local_paths(const QMimeData* mime_data) {
+    std::vector<fs::path> paths;
+
+    for(const QUrl& url : mime_data->urls()) {
+        if(url.isLocalFile()) {
+            paths.emplace_back(url.toLocalFile().toStdString());
+        }
+    }
+    return paths;
+}
+
+void Main_view::dragEnterEvent(QDragEnterEvent* event) {
+    if(!local_paths(event->mimeData()).empty()) {
+        event->acceptProposedAction();
+    }
+}
+
+void Main_view::dropEvent(QDropEvent* event) {
+    std::vector<fs::path> paths = local_paths(event->mimeData());
+    event->acceptProposedAction();
+    // Open after the drop returns so the drag source isn't blocked by the progress dialog.
+    QMetaObject::invokeMethod(this, [this, paths] {files_dropped(paths);}, Qt::QueuedConnection);
 }
 
 QSize Main_view::sizeHint() const {

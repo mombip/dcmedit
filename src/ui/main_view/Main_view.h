@@ -40,6 +40,8 @@ private:
     QToolBar* create_editor_tool_bar();
 
     void closeEvent(QCloseEvent*) override;
+    void dragEnterEvent(QDragEnterEvent*) override;
+    void dropEvent(QDropEvent*) override;
     QSize sizeHint() const override;
 
     Startup_view* m_startup_view;
