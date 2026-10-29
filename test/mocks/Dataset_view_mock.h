@@ -17,6 +17,8 @@ public:
     IMPLEMENT_MOCK0(create_add_element_view);
     IMPLEMENT_MOCK0(create_edit_value_view);
     IMPLEMENT_MOCK1(get_model_index);
+    IMPLEMENT_MOCK0(get_selected_indexes);
+    IMPLEMENT_MOCK1(show_hex);
     IMPLEMENT_MOCK1(show_context_menu);
     IMPLEMENT_MOCK2(show_item_context_menu);
     IMPLEMENT_MOCK2(show_sq_context_menu);

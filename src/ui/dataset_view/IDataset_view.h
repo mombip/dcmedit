@@ -23,6 +23,7 @@ public:
     eventi::Event<const QModelIndex&> load_value_from_file_clicked;
     eventi::Event<const QModelIndex&> element_activated;
     eventi::Event<const QPoint&> context_menu_requested;
+    eventi::Event<> selection_changed;
 
     virtual void set_model(Dataset_model&) = 0;
     virtual void show_error(const std::string& title, const std::string& text) = 0;
@@ -31,6 +32,8 @@ public:
     virtual std::unique_ptr<IAdd_element_view> create_add_element_view() = 0;
     virtual std::unique_ptr<IEdit_value_view> create_edit_value_view() = 0;
     virtual QModelIndex get_model_index(const QPoint&) = 0;
+    virtual QModelIndexList get_selected_indexes() = 0;
+    virtual void show_hex(const std::string&) = 0;
     virtual void show_context_menu(const QPoint&) = 0;
     virtual void show_item_context_menu(const QPoint&, const QModelIndex&) = 0;
     virtual void show_sq_context_menu(const QPoint&, const QModelIndex&) = 0;

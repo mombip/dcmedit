@@ -6,16 +6,19 @@
 
 #include <QContextMenuEvent>
 #include <QFileDialog>
+#include <QFontDatabase>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QSplitter>
 #include <QVBoxLayout>
 
 Dataset_view::Dataset_view()
     : m_proxy_model(new QSortFilterProxyModel(this)),
       m_tree_view(new QTreeView()),
+      m_hex_view(new QPlainTextEdit()),
       m_resized_to_content(false) {
     setFrameStyle(QFrame::Panel | QFrame::Raised);
     m_proxy_model->setFilterKeyColumn(-1);
@@ -23,6 +26,14 @@ Dataset_view::Dataset_view()
     m_tree_view->setModel(m_proxy_model);
     m_tree_view->setAlternatingRowColors(true);
     m_tree_view->setUniformRowHeights(true);
+    m_tree_view->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    connect(m_tree_view->selectionModel(), &QItemSelectionModel::selectionChanged, [this] {
+        selection_changed();
+    });
+    m_hex_view->setReadOnly(true);
+    m_hex_view->setLineWrapMode(QPlainTextEdit::NoWrap);
+    m_hex_view->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    m_hex_view->setPlaceholderText("Select one or more elements to see their bytes in the file");
     connect(m_tree_view, &QTreeView::activated, [this] (auto& proxy_index) {
         QModelIndex index = m_proxy_model->mapToSource(proxy_index);
         element_activated(index);
@@ -45,7 +56,12 @@ Dataset_view::Dataset_view()
     header_layout->addStretch(1);
 
     layout->addLayout(header_layout);
-    layout->addWidget(m_tree_view);
+    auto splitter = new QSplitter(Qt::Vertical);
+    splitter->addWidget(m_tree_view);
+    splitter->addWidget(m_hex_view);
+    splitter->setStretchFactor(0, 3);
+    splitter->setStretchFactor(1, 1);
+    layout->addWidget(splitter);
 
     auto image_action = new QAction("Image view", this);
     image_action->setShortcut({"1"});
@@ -87,6 +103,19 @@ QModelIndex Dataset_view::get_model_index(const QPoint& pos) {
     QPoint tree_pos = m_tree_view->viewport()->mapFrom(this, pos);
     QModelIndex proxy_index = m_tree_view->indexAt(tree_pos);
     return m_proxy_model->mapToSource(proxy_index);
+}
+
+QModelIndexList Dataset_view::get_selected_indexes() {
+    QModelIndexList indexes;
+
+    for(const QModelIndex& proxy_index : m_tree_view->selectionModel()->selectedRows()) {
+        indexes.append(m_proxy_model->mapToSource(proxy_index));
+    }
+    return indexes;
+}
+
+void Dataset_view::show_hex(const std::string& text) {
+    m_hex_view->setPlainText(QString::fromStdString(text));
 }
 
 void Dataset_view::show_context_menu(const QPoint& pos) {

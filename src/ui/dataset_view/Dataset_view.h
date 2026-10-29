@@ -3,6 +3,7 @@
 #include "ui/dataset_view/IDataset_view.h"
 
 #include <QFrame>
+#include <QPlainTextEdit>
 #include <QSortFilterProxyModel>
 #include <QTreeView>
 
@@ -19,6 +20,8 @@ public:
     std::unique_ptr<IAdd_element_view> create_add_element_view() override;
     std::unique_ptr<IEdit_value_view> create_edit_value_view() override;
     QModelIndex get_model_index(const QPoint&) override;
+    QModelIndexList get_selected_indexes() override;
+    void show_hex(const std::string&) override;
     void show_context_menu(const QPoint&) override;
     void show_item_context_menu(const QPoint&, const QModelIndex&) override;
     void show_sq_context_menu(const QPoint&, const QModelIndex&) override;
@@ -31,5 +34,6 @@ private:
 
     QSortFilterProxyModel* m_proxy_model;
     QTreeView* m_tree_view;
+    QPlainTextEdit* m_hex_view;
     bool m_resized_to_content;
 };

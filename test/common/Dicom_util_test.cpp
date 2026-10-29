@@ -1,12 +1,16 @@
 #include "common/Dicom_util.h"
 #include "common/Exceptions.h"
+#include "test_utils/Temp_dir.h"
 
 #include <catch2/catch.hpp>
 
 #include <cstring>
+#include <fstream>
 #include <dcmtk/dcmdata/dcelem.h>
 #include <dcmtk/dcmdata/dcdatset.h>
 #include <dcmtk/dcmdata/dcdeftag.h>
+#include <dcmtk/dcmdata/dcfilefo.h>
+#include <dcmtk/dcmdata/dcmetinf.h>
 #include <dcmtk/dcmdata/dcsequen.h>
 #include <stdexcept>
 
@@ -130,4 +134,129 @@ TEST_CASE("Testing Dicom_util::get_index_nr") {
         CHECK(Dicom_util::get_index_nr(*item1) == 0);
         CHECK(Dicom_util::get_index_nr(*item2) == 1);
 	}
+}
+
+TEST_CASE("Testing Dicom_util::find_in_file") {
+
+    Temp_dir temp_dir;
+    const auto path = temp_dir.path() / "file.dcm";
+    const auto xfer = GENERATE(EXS_LittleEndianExplicit, EXS_LittleEndianImplicit, EXS_BigEndianExplicit);
+    const auto sq_encoding = GENERATE(EET_ExplicitLength, EET_UndefinedLength);
+    const bool big_endian = xfer == EXS_BigEndianExplicit;
+    {
+        DcmFileFormat file;
+        DcmDataset* dataset = file.getDataset();
+        REQUIRE(dataset->putAndInsertString(DCM_PatientName, "Doe").good());
+        Dicom_util::set_element("(8,6)[0].PatientID", "1234", true, *dataset);
+        Dicom_util::set_element("(8,6)[1].PatientID", "5678", true, *dataset);
+        REQUIRE(file.saveFile(path.c_str(), xfer, sq_encoding).good());
+    }
+    DcmFileFormat file;
+    REQUIRE(file.loadFile(path.c_str()).good());
+    DcmDataset& dataset = *file.getDataset();
+    auto read = [&] (DcmObject& object) {
+        auto range = Dicom_util::find_in_file(path, object, xfer);
+        REQUIRE(range.has_value());
+        return Dicom_util::read_file_bytes(path, range->offset, range->length);
+    };
+    auto tag_bytes = [&] (uint16_t group, uint16_t element) {
+        return big_endian
+            ? std::vector<uint8_t>{uint8_t(group >> 8), uint8_t(group), uint8_t(element >> 8), uint8_t(element)}
+            : std::vector<uint8_t>{uint8_t(group), uint8_t(group >> 8), uint8_t(element), uint8_t(element >> 8)};
+    };
+    auto ends_with = [] (const std::vector<uint8_t>& bytes, const std::string& suffix) {
+        return bytes.size() >= suffix.size() && std::equal(suffix.rbegin(), suffix.rend(), bytes.rbegin());
+    };
+
+    SECTION("a top level element is found with its header and value") {
+        DcmElement* element = nullptr;
+        REQUIRE(dataset.findAndGetElement(DCM_PatientName, element).good());
+        std::vector<uint8_t> bytes = read(*element);
+        CHECK(bytes.size() == 12);
+        CHECK(std::vector<uint8_t>(bytes.begin(), bytes.begin() + 4) == tag_bytes(0x10, 0x10));
+        CHECK(ends_with(bytes, "Doe "));
+    }
+    SECTION("an element in the second item of a sequence is found") {
+        DcmItem* item = nullptr;
+        REQUIRE(dataset.findAndGetSequenceItem(DCM_LanguageCodeSequence, item, 1).good());
+        DcmElement* element = nullptr;
+        REQUIRE(item->findAndGetElement(DCM_PatientID, element).good());
+        std::vector<uint8_t> bytes = read(*element);
+        CHECK(bytes.size() == 12);
+        CHECK(std::vector<uint8_t>(bytes.begin(), bytes.begin() + 4) == tag_bytes(0x10, 0x20));
+        CHECK(ends_with(bytes, "5678"));
+    }
+    SECTION("an item is found from its item tag to its end") {
+        DcmItem* item = nullptr;
+        REQUIRE(dataset.findAndGetSequenceItem(DCM_LanguageCodeSequence, item, 1).good());
+        std::vector<uint8_t> bytes = read(*item);
+        CHECK(std::vector<uint8_t>(bytes.begin(), bytes.begin() + 4) == tag_bytes(0xFFFE, 0xE000));
+        CHECK(bytes.size() == (sq_encoding == EET_UndefinedLength ? 28u : 20u));
+    }
+    SECTION("an element added after loading is not found") {
+        REQUIRE(dataset.putAndInsertString(DCM_PatientSex, "O").good());
+        DcmElement* element = nullptr;
+        REQUIRE(dataset.findAndGetElement(DCM_PatientSex, element).good());
+        CHECK_FALSE(Dicom_util::find_in_file(path, *element, xfer).has_value());
+    }
+}
+
+TEST_CASE("Testing Dicom_util::find_in_file with group 0002 elements in the dataset") {
+
+    Temp_dir temp_dir;
+    const auto path = temp_dir.path() / "file.dcm";
+    const std::string preamble = std::string(128, '\0') + "DICM";
+    const std::string meta =
+        std::string("\x02\x00\x00\x00UL\x04\x00\x26\x00\x00\x00", 12)
+        + std::string("\x02\x00\x02\x00UI\x04\x00", 8) + "1.23"
+        + std::string("\x02\x00\x10\x00UI\x12\x00", 8) + std::string("1.2.840.10008.1.2\0", 18);
+    const std::string dataset_bytes =
+        std::string("\x02\x00\x17\x00\x02\x00\x00\x00", 8) + "AE"
+        + std::string("\x10\x00\x10\x00\x04\x00\x00\x00", 8) + "Doe ";
+    std::ofstream(path, std::ios_base::binary) << preamble << meta << dataset_bytes;
+
+    DcmFileFormat file;
+    REQUIRE(file.loadFile(path.c_str()).good());
+    DcmDataset& dataset = *file.getDataset();
+    REQUIRE(dataset.getOriginalXfer() == EXS_LittleEndianImplicit);
+    const uint64_t dataset_start = preamble.size() + meta.size();
+
+    SECTION("a group 0002 element in the dataset is found right after the meta header") {
+        DcmElement* element = nullptr;
+        REQUIRE(dataset.findAndGetElement({0x0002, 0x0017}, element).good());
+        auto range = Dicom_util::find_in_file(path, *element, EXS_LittleEndianImplicit);
+        REQUIRE(range.has_value());
+        CHECK(range->offset == dataset_start);
+        CHECK(range->length == 10);
+    }
+    SECTION("a file meta information element is found in the meta header") {
+        DcmElement* element = nullptr;
+        REQUIRE(file.getMetaInfo()->findAndGetElement(DCM_TransferSyntaxUID, element).good());
+        auto range = Dicom_util::find_in_file(path, *element, EXS_LittleEndianImplicit);
+        REQUIRE(range.has_value());
+        CHECK(range->offset == preamble.size() + 24);
+        CHECK(range->length == 26);
+    }
+    SECTION("the file meta information spans from after the preamble to the dataset") {
+        auto range = Dicom_util::find_in_file(path, *file.getMetaInfo(), EXS_LittleEndianImplicit);
+        REQUIRE(range.has_value());
+        CHECK(range->offset == preamble.size());
+        CHECK(range->length == meta.size());
+    }
+    SECTION("the following element is found after it") {
+        DcmElement* element = nullptr;
+        REQUIRE(dataset.findAndGetElement(DCM_PatientName, element).good());
+        auto range = Dicom_util::find_in_file(path, *element, EXS_LittleEndianImplicit);
+        REQUIRE(range.has_value());
+        CHECK(range->offset == dataset_start + 10);
+        CHECK(range->length == 12);
+    }
+}
+
+TEST_CASE("Testing Dicom_util::to_hex_dump") {
+
+    SECTION("shows offset, bytes and printable characters") {
+        const std::string dump = Dicom_util::to_hex_dump({0x10, 0x00, 'P', 'N'}, 0x20);
+        CHECK(dump == "00000020  10 00 50 4e " + std::string(12 * 3, ' ') + " ..PN\n");
+    }
 }

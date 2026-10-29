@@ -3,6 +3,7 @@
 #include "ui/IPresenter.h"
 #include "ui/dataset_view/IDataset_view.h"
 
+#include <eventi/Scoped_callbacks.h>
 #include <QModelIndex>
 #include <QPoint>
 
@@ -21,7 +22,9 @@ private:
     void save_value_to_file(const QModelIndex&);
     void load_value_from_file(const QModelIndex&);
     void show_context_menu(const QPoint&);
+    void update_hex_view();
 
     IDataset_view& m_view;
     Dataset_model& m_dataset_model;
+    eventi::Scoped_callbacks m_scoped_callbacks;
 };
