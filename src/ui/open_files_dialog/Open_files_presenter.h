@@ -8,6 +8,8 @@ public:
     Open_files_presenter(IOpen_files_view&, Dicom_files&);
 
     void show_dialog();
+    /** Opens files; folders are opened recursively, logging files that fail. */
+    void open_files(const std::vector<fs::path>&);
 
 private:
     IOpen_files_view& m_view;

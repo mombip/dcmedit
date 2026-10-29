@@ -10,6 +10,7 @@
 #include <eventi/Event.h>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -21,6 +22,7 @@ public:
     eventi::Event<> new_file_clicked;
     eventi::Event<> open_files_clicked;
     eventi::Event<> open_folder_clicked;
+    eventi::Event<std::vector<fs::path>> files_dropped;
     eventi::Event<> save_file_clicked;
     eventi::Event<> save_file_as_clicked;
     eventi::Event<> save_all_files_clicked;

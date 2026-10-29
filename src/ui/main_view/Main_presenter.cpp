@@ -30,6 +30,7 @@ void Main_presenter::setup_event_callbacks() {
     m_view.new_file_clicked.add_callback([this] {new_file();});
     m_view.open_files_clicked.add_callback([this] {open_files();});
     m_view.open_folder_clicked.add_callback([this] {open_folder();});
+    m_view.files_dropped.add_callback([this] (const std::vector<fs::path>& paths) {open_dropped(paths);});
     m_view.save_file_clicked.add_callback([this] {save_file();});
     m_view.save_file_as_clicked.add_callback([this] {save_file_as();});
     m_view.save_all_files_clicked.add_callback([this] {save_all_files();});
@@ -81,6 +82,12 @@ void Main_presenter::open_folder() {
     std::unique_ptr<IOpen_folder_view> view = m_view.create_open_folder_view();
     Open_folder_presenter presenter(*view, m_files);
     presenter.show_dialog();
+}
+
+void Main_presenter::open_dropped(const std::vector<fs::path>& paths) {
+    std::unique_ptr<IOpen_files_view> view = m_view.create_open_files_view();
+    Open_files_presenter presenter(*view, m_files);
+    presenter.open_files(paths);
 }
 
 void Main_presenter::new_file() {

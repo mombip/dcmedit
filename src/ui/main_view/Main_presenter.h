@@ -7,6 +7,7 @@
 #include "ui/main_view/IMain_view.h"
 #include "ui/split_view/Split_presenter.h"
 #include <filesystem>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -27,6 +28,7 @@ private:
     void new_file();
     void open_files();
     void open_folder();
+    void open_dropped(const std::vector<fs::path>&);
     void save_file();
     void save_file_as();
     void save_file_as(const fs::path&);
