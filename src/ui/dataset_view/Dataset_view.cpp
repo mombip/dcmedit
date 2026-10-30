@@ -12,14 +12,25 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QScrollBar>
 #include <QSplitter>
 #include <QVBoxLayout>
+
+static QString get_path(QModelIndex index) {
+    QString path;
+
+    for(; index.isValid(); index = index.parent()) {
+        path.prepend('\n' + index.siblingAtColumn(0).data().toString());
+    }
+    return path;
+}
 
 Dataset_view::Dataset_view()
     : m_proxy_model(new QSortFilterProxyModel(this)),
       m_tree_view(new QTreeView()),
       m_hex_view(new QPlainTextEdit()),
-      m_resized_to_content(false) {
+      m_resized_to_content(false),
+      m_scroll_position(0) {
     setFrameStyle(QFrame::Panel | QFrame::Raised);
     m_proxy_model->setFilterKeyColumn(-1);
     m_proxy_model->setRecursiveFilteringEnabled(true);
@@ -29,6 +40,22 @@ Dataset_view::Dataset_view()
     m_tree_view->setSelectionMode(QAbstractItemView::ExtendedSelection);
     connect(m_tree_view->selectionModel(), &QItemSelectionModel::selectionChanged, [this] {
         selection_changed();
+    });
+    connect(m_tree_view->selectionModel(), &QItemSelectionModel::currentChanged, [this] (auto& index) {
+        if(index.isValid()) {
+            m_current_path = get_path(index);
+        }
+    });
+    connect(m_tree_view, &QTreeView::expanded, [this] (auto& index) {m_expanded_paths.insert(get_path(index));});
+    connect(m_tree_view, &QTreeView::collapsed, [this] (auto& index) {m_expanded_paths.remove(get_path(index));});
+    // The model is reset when another file is loaded.
+    connect(m_proxy_model, &QAbstractItemModel::modelAboutToBeReset, [this] {
+        m_scroll_position = m_tree_view->verticalScrollBar()->value();
+    });
+    connect(m_proxy_model, &QAbstractItemModel::modelReset, [this] {
+        restore_view_state(QModelIndex(), QString());
+        m_tree_view->doItemsLayout();
+        m_tree_view->verticalScrollBar()->setValue(m_scroll_position);
     });
     m_hex_view->setReadOnly(true);
     m_hex_view->setLineWrapMode(QPlainTextEdit::NoWrap);
@@ -165,6 +192,23 @@ void Dataset_view::show_element_context_menu(const QPoint& pos, const QModelInde
     });
     menu->setAttribute(Qt::WA_DeleteOnClose);
     menu->popup(mapToGlobal(pos));
+}
+
+void Dataset_view::restore_view_state(const QModelIndex& parent, const QString& parent_path) {
+    const QString current_path = m_current_path;
+
+    for(int row = 0; row < m_proxy_model->rowCount(parent); ++row) {
+        QModelIndex index = m_proxy_model->index(row, 0, parent);
+        QString path = parent_path + '\n' + index.data().toString();
+
+        if(path == current_path) {
+            m_tree_view->setCurrentIndex(index);
+        }
+        if(m_expanded_paths.contains(path)) {
+            m_tree_view->expand(index);
+            restore_view_state(index, path);
+        }
+    }
 }
 
 void Dataset_view::showEvent(QShowEvent*) {

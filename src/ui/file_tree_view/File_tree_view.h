@@ -3,6 +3,7 @@
 #include "ui/file_tree_view/IFile_tree_view.h"
 
 #include <QDockWidget>
+#include <QSortFilterProxyModel>
 #include <QTreeView>
 
 class File_tree_view : public QDockWidget, public IFile_tree_view
@@ -14,5 +15,6 @@ public:
     void set_model(File_tree_model&) override;
 
 private:
+    QSortFilterProxyModel* m_proxy_model;
     QTreeView* m_tree_view;
 };
