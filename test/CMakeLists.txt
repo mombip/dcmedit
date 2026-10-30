@@ -71,6 +71,7 @@ add_executable(unit-test
   Fake_version.cpp
   common/Dicom_util_test.cpp
   models/Dicom_files_test.cpp
+  models/File_tree_model_test.cpp
   models/Transform_tool_test.cpp
   test_constants.h
   test_utils/Check_event.h

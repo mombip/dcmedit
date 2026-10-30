@@ -4,6 +4,7 @@
 
 #include <QFrame>
 #include <QPlainTextEdit>
+#include <QSet>
 #include <QSortFilterProxyModel>
 #include <QTreeView>
 
@@ -31,9 +32,14 @@ private:
     void showEvent(QShowEvent*) override;
     void enterEvent(QEvent*) override;
     void contextMenuEvent(QContextMenuEvent*) override;
+    void restore_view_state(const QModelIndex& parent, const QString& parent_path);
 
     QSortFilterProxyModel* m_proxy_model;
     QTreeView* m_tree_view;
     QPlainTextEdit* m_hex_view;
     bool m_resized_to_content;
+    // Expanded nodes and the current element, by tag path, kept across files.
+    QSet<QString> m_expanded_paths;
+    QString m_current_path;
+    int m_scroll_position;
 };

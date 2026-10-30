@@ -23,6 +23,9 @@ static QStandardItem* find_or_create_item(QStandardItem* parent, const QString& 
         item->setData(QVariant::fromValue(id));
         parent->appendRow(item);
     }
+    for(int role = File_tree_model::name_role; role <= File_tree_model::instance_number_role; ++role) {
+        item->setData(text, role);
+    }
     return item;
 }
 
@@ -54,6 +57,14 @@ static QString get_series_text(DcmDataset& dataset) {
         dataset.findAndGetString(DCM_SeriesInstanceUID, text);
     }
     return text != nullptr ? text : "<No Series UID>";
+}
+
+static QString get_date_time(DcmDataset& dataset, const DcmTagKey& date_key, const DcmTagKey& time_key) {
+    const char* date = nullptr;
+    const char* time = nullptr;
+    dataset.findAndGetString(date_key, date);
+    dataset.findAndGetString(time_key, time);
+    return QString(date) + QString(time);
 }
 
 File_tree_model::File_tree_model(Dicom_files& files)
@@ -95,6 +106,7 @@ void File_tree_model::add_items() {
         std::string file_path = file->get_path().string();
         QStandardItem* file_item = find_or_create_item<Dicom_file*>(series_item, QString::fromStdString(file_path), file.get());
         decorate_file_item(*file_item);
+        set_sort_keys(*file_item, dataset);
     }
 }
 
@@ -172,4 +184,17 @@ void File_tree_model::decorate_file_item(QStandardItem& file_item) {
     QFont font = file_item.font();
     font.setBold(file == m_files.get_current_file());
     file_item.setFont(font);
+}
+
+void File_tree_model::set_sort_keys(QStandardItem& file_item, DcmDataset& dataset) {
+    const char* acquisition_date_time = nullptr;
+    dataset.findAndGetString(DCM_AcquisitionDateTime, acquisition_date_time);
+    file_item.setData(acquisition_date_time != nullptr
+        ? QString(acquisition_date_time)
+        : get_date_time(dataset, DCM_AcquisitionDate, DCM_AcquisitionTime), acquisition_time_role);
+    file_item.setData(get_date_time(dataset, DCM_InstanceCreationDate, DCM_InstanceCreationTime), instance_time_role);
+
+    Sint32 instance_number = 0;
+    file_item.setData(dataset.findAndGetSint32(DCM_InstanceNumber, instance_number).good()
+        ? QVariant(instance_number) : QVariant(), instance_number_role);
 }
